@@ -1,0 +1,15 @@
+[Unit]
+Description=PicoClaw Gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=plue
+WorkingDirectory=/home/plue/.picoclaw/workspace
+ExecStart=/home/plue/picoclaw gateway
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
