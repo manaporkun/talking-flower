@@ -1,0 +1,9 @@
+.env
+*.mp3
+*.wav
+__pycache__/
+*.pyc
+.venv/
+response_*.mp3
+speak_tmp.mp3
+last_input.wav
