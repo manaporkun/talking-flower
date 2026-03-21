@@ -47,6 +47,9 @@ MAX_RECORD_SECONDS = float(os.getenv("MAX_RECORD_SECONDS", "30"))
 GPIO_BUTTON_PIN = int(os.getenv("GPIO_BUTTON_PIN", "17"))
 INPUT_MODE = os.getenv("INPUT_MODE", "auto")  # "gpio", "keyboard", or "auto"
 STARTUP_MESSAGE = os.getenv("STARTUP_MESSAGE", "")
+IDLE_CHATTER = os.getenv("IDLE_CHATTER", "1").lower() not in ("0", "false", "no", "off")
+IDLE_INTERVAL_MIN = int(os.getenv("IDLE_INTERVAL_MIN", "5"))
+IDLE_INTERVAL_MAX = int(os.getenv("IDLE_INTERVAL_MAX", "15"))
 
 INPUT_FALLBACK_RATES = [16000, 48000, 44100, 32000, 8000]
 
@@ -369,6 +372,67 @@ def speak(text):
     play_audio_file("speak_tmp.mp3")
 
 
+# --- Idle Chatter ---
+
+def get_idle_line():
+    """Get a random idle chatter line."""
+    try:
+        from idle_chatter import get_idle_line as _get
+        return _get()
+    except ImportError:
+        return None
+
+
+def get_time_greeting():
+    """Get a time-aware greeting."""
+    try:
+        from idle_chatter import get_time_greeting as _get
+        return _get()
+    except ImportError:
+        return None
+
+
+class IdleChatterTimer:
+    """Speaks random lines when idle. Resets on any interaction."""
+
+    def __init__(self, speak_fn):
+        self._speak = speak_fn
+        self._stop = threading.Event()
+        self._reset = threading.Event()
+        self._thread = None
+
+    def start(self):
+        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._thread.start()
+
+    def reset(self):
+        self._reset.set()
+
+    def stop(self):
+        self._stop.set()
+
+    def _loop(self):
+        import random
+        while not self._stop.is_set():
+            wait = random.randint(IDLE_INTERVAL_MIN * 60, IDLE_INTERVAL_MAX * 60)
+            # Wait, but break early if reset or stopped
+            for _ in range(wait):
+                if self._stop.is_set():
+                    return
+                if self._reset.is_set():
+                    self._reset.clear()
+                    break
+                time.sleep(1)
+            else:
+                # Timer expired without reset — say something
+                line = get_idle_line()
+                if line:
+                    try:
+                        self._speak(line)
+                    except Exception:
+                        pass
+
+
 # --- Conversation Turn ---
 
 def handle_turn(dev_idx, rate):
@@ -434,17 +498,27 @@ def run_gpio_mode(dev_idx, rate):
     button = GPIOButton(GPIO_BUTTON_PIN, pull_up=True, bounce_time=0.3)
     print(f"GPIO mode: press button on pin {GPIO_BUTTON_PIN} to talk.\n")
 
-    if STARTUP_MESSAGE:
+    # Time-aware startup greeting
+    greeting = STARTUP_MESSAGE or get_time_greeting()
+    if greeting:
         try:
-            speak(STARTUP_MESSAGE)
+            speak(greeting)
         except Exception as e:
             print(f"Startup speak error: {e}")
+
+    # Start idle chatter
+    chatter = None
+    if IDLE_CHATTER:
+        chatter = IdleChatterTimer(speak)
+        chatter.start()
 
     running = True
 
     def on_press():
         if not running:
             return
+        if chatter:
+            chatter.reset()
         print("\n--- Button pressed ---")
         handle_turn(dev_idx, rate)
         print("\nReady. Press button to talk.")
@@ -457,6 +531,8 @@ def run_gpio_mode(dev_idx, rate):
             time.sleep(0.1)
     except KeyboardInterrupt:
         running = False
+        if chatter:
+            chatter.stop()
         print("\nBye!")
 
 
@@ -467,11 +543,19 @@ def run_keyboard_mode(dev_idx, rate):
 
     print("Keyboard mode: press SPACE to talk, 'q' to quit.\n")
 
-    if STARTUP_MESSAGE:
+    # Time-aware startup greeting
+    greeting = STARTUP_MESSAGE or get_time_greeting()
+    if greeting:
         try:
-            speak(STARTUP_MESSAGE)
+            speak(greeting)
         except Exception as e:
             print(f"Startup speak error: {e}")
+
+    # Start idle chatter
+    chatter = None
+    if IDLE_CHATTER:
+        chatter = IdleChatterTimer(speak)
+        chatter.start()
 
     old_settings = termios.tcgetattr(sys.stdin)
     try:
@@ -482,6 +566,8 @@ def run_keyboard_mode(dev_idx, rate):
             if key in ('q', 'Q', '\x03'):
                 break
             if key == ' ':
+                if chatter:
+                    chatter.reset()
                 termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
                 handle_turn(dev_idx, rate)
                 print("\n[SPACE] to speak, [q] to quit\n")
@@ -489,6 +575,8 @@ def run_keyboard_mode(dev_idx, rate):
     except KeyboardInterrupt:
         pass
     finally:
+        if chatter:
+            chatter.stop()
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
         print("\nBye!")
 
