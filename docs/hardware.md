@@ -5,56 +5,85 @@
 | Item | Purpose | Status |
 |------|---------|--------|
 | Nintendo Talking Flower toy | Enclosure, button, speaker | Done |
-| Raspberry Pi Zero 2 WH | Brain (pre-soldered headers) | Done |
-| Dupont jumper wires (M-F, M-M, F-F) | Connecting components to Pi GPIO | Done |
-| Soldering iron set | Solder wires to toy's sub-board | Done |
-| Multimeter | Identify button pins, check speaker | Done |
+| Raspberry Pi Zero 2 WH (512 MB, 1 GHz) | Brain (pre-soldered headers) | Done |
+| Elegoo 120pcs Dupont jumper wires (M-F, M-M, F-F) | Connecting components | Done |
+| Soldering iron set (80W, LCD, 180-520C) | Solder wires to toy's sub-board | Done |
+| AstroAI digital multimeter | Identify pins, check speaker impedance | Done |
 | Micro-USB OTG adapter | USB devices to Pi | Done |
-| MAX98357A I2S amplifier/DAC | Speaker output via I2S GPIO (no USB needed) | Ordered |
-| INMP441 I2S MEMS microphone | Mic input via I2S GPIO (no USB needed) | Ordered |
+| MAX98357A I2S amplifier/DAC | Speaker output via I2S GPIO (replaces UGREEN) | Ordered |
+| INMP441 I2S MEMS microphone | Mic input via I2S GPIO | Ordered |
 
-### No longer needed
+### Previously used (being replaced)
 
-| Item | Reason |
-|------|--------|
-| USB sound card (UGREEN) | Replaced by I2S amp + mic |
-| PAM8403 amplifier | MAX98357A has built-in amp |
-| 3.5mm microphone | Replaced by INMP441 I2S mic |
+| Item | Replaced by |
+|------|-------------|
+| UGREEN USB sound card | MAX98357A (output) + INMP441 (input) |
 
 ## Architecture
 
-All audio goes through the Pi's GPIO via I2S — no USB audio at all:
+All audio goes through the Pi's GPIO via I2S — no USB audio:
 
 ```
 INMP441 mic ──(I2S)──> Pi GPIO ──(I2S)──> MAX98357A ──> Toy speaker
                           │
                      Button (GPIO17)
+                     (dome switch on TAF-SUB-01)
 ```
 
-## Toy PCB Layout
+## Toy PCB Details
 
-The toy has two PCBs connected by a 6-wire ribbon cable:
+The toy has two PCBs connected by a 6-wire ribbon cable.
 
-### TAF-MAIN-01 (Main Board) — BYPASSED
-- Contains the original processor, memory, audio codec
-- **Disconnect the ribbon cable from this board** — the Pi replaces it entirely
+### TAF-MAIN-01 — Main Board (BYPASSED)
 
-### TAF-SUB-01 (Sub Board) — KEEPING
-- **Tactile button**: Bottom-right, 2-pin momentary switch (the flower's press button)
-- **Speaker wires**: Red (+) and black (-) at center-left, go to speaker in flower head
-- **LED pads**: Row of contacts along bottom edge (for future lighting effects)
+- **Photos:** IMG_2557.HEIC (Side A), IMG_2558.HEIC (Side B)
+- Side A: Main processor IC (QFP package), two smaller ICs (memory/audio codec), passives. Labeled "SIDE-A", "TAF-MAIN-01", date code "2B25".
+- Side B: QR code serial "0A05 3765 T01M 00540". Gold edge connector strip (~10 contacts) for ribbon cable.
+- **Action:** Ribbon cable desoldered from this board. Board is no longer used.
 
-## Wiring
+### TAF-SUB-01 — Sub Board (KEEPING)
 
-### Button → Pi GPIO (DONE)
+- **Photos:** IMG_2559.HEIC (component side), IMG_2582.HEIC (trace side with Dupont wires)
+- **Button:** NOT a tactile push switch. It's a **cross-shaped open contact pad** (dome switch) — two concentric contact areas bridged by a conductive rubber dome in the toy's plastic housing when pressed.
+- **Speaker wires:** Red (+) and black (-) soldered to board pads. These are independent of the ribbon cable but connect through PCB traces to the ribbon cable pads.
+- **Row of gold pads** along bottom edge — purpose unconfirmed (possibly LEDs or battery contacts).
+- **Ribbon cable:** Original 6-wire cable desoldered from TAF-MAIN-01. 5 Dupont wires soldered to the ribbon cable pads on TAF-SUB-01.
 
-1. Identified button legs with multimeter continuity mode
-2. Soldered two wires to button pads on TAF-SUB-01
-3. Attached female Dupont connectors
-4. Connected to Pi:
-   - One wire → **GPIO17** (physical pin 11)
-   - Other wire → **GND** (physical pin 9)
-5. Software uses internal pull-up — button press pulls GPIO LOW
+## Wire Map (Confirmed by Multimeter)
+
+| Dupont Wire Color | Function | How Confirmed |
+|-------------------|----------|---------------|
+| **Black** | Button (side 1) | Continuity with button contact pad |
+| **White** | Button (side 2) | Continuity with button contact pad |
+| **Purple** | Speaker (one side) | Resistance: purple+gray reads 7-16 ohm (8 ohm speaker coil) |
+| **Gray** | Speaker (other side) | Same as above |
+| **Blue** | Unknown | Not button, not speaker. Possibly battery/power or LED. |
+
+**Key findings:**
+- The speaker IS routed through the ribbon cable via purple and gray wires
+- The red/black wires on the board connect through PCB traces to purple/gray Dupont wires
+- Button press bridges Black and White wires together
+- Speaker impedance: ~8 ohm
+
+## Current Wiring (DONE)
+
+### Button → Pi GPIO
+
+- **Black** Dupont wire → **GPIO17** (physical pin 11)
+- **White** Dupont wire → **GND** (physical pin 9)
+- Software uses internal pull-up. Button press shorts Black+White, pulling GPIO17 to GND.
+- Tested and working with gpiozero.
+
+### Speaker → UGREEN (Temporary, will be replaced by MAX98357A)
+
+Connected via a cut headphone cable:
+- **Copper** headphone wire soldered to **purple** Dupont wire
+- **Red** headphone wire soldered to **gray** Dupont wire
+- Blue headphone wire unused
+- 3.5mm plug into UGREEN headphone output
+- Volume is low without amplifier — MAX98357A will fix this
+
+## Future Wiring (When I2S parts arrive)
 
 ### MAX98357A (Speaker Output) → Pi GPIO
 
@@ -66,7 +95,7 @@ The toy has two PCBs connected by a 6-wire ribbon cable:
 | GND | GND (pin 6) |
 | VIN | 5V (pin 2) |
 
-Then connect MAX98357A speaker output (+/-) to the toy's speaker wires (red/black from TAF-SUB-01).
+Then connect MAX98357A speaker output (+/-) to **purple** and **gray** Dupont wires (which connect to the toy speaker through TAF-SUB-01 traces).
 
 ### INMP441 (Microphone Input) → Pi GPIO
 
@@ -79,36 +108,47 @@ Then connect MAX98357A speaker output (+/-) to the toy's speaker wires (red/blac
 | GND | GND (pin 14) |
 | L/R | GND (for left channel) |
 
-**Note:** SCK and WS pins are shared between the amp and mic — this is normal for I2S.
-
 ### Enabling I2S on the Pi
 
 ```bash
-# Add to /boot/firmware/config.txt:
+# Add to /boot/firmware/config.txt
 dtoverlay=googlevoicehat-soundcard  # or hifiberry-dac for MAX98357A
-# For INMP441, also add:
-dtoverlay=i2s-mmap
 
 # Reboot
 sudo reboot
 ```
 
-Exact overlay configuration may need tuning — will be finalized when boards arrive.
+Exact overlay configuration will be finalized when boards arrive.
 
-## Current Progress
+## Progress
 
 | Step | Status |
 |------|--------|
+| Acquire hardware | Done |
 | Install PicoClaw on Pi | Done |
-| Open toy and photograph PCBs | Done |
-| Solder wires to button on TAF-SUB-01 | Done |
+| Open toy and photograph PCBs | Done (4 photos) |
+| Desolder ribbon cable from TAF-MAIN-01 | Done |
+| Solder 5 Dupont wires to TAF-SUB-01 pads | Done |
+| Identify all wire functions with multimeter | Done |
 | Connect button to Pi GPIO17 | Done |
 | Test button via GPIO | Done |
-| Connect speaker to USB sound card (temp) | Done |
-| Test audio output via USB | Done |
+| Connect speaker to UGREEN (temporary) | Done |
+| Test audio output | Done (low volume without amp) |
+| Voice assistant software | Done |
+| PicoClaw integration + character | Done |
 | Wire MAX98357A for I2S speaker output | Waiting for parts |
 | Wire INMP441 for I2S mic input | Waiting for parts |
 | Enable I2S overlays on Pi | Waiting for parts |
 | Test full loop (button → voice → response → speaker) | Waiting for parts |
 | Final assembly inside toy | Waiting for parts |
-| Optional: Reuse LED pads for effects | Future |
+| Figure out blue wire function | Future |
+| Reuse LED pads for effects | Future |
+
+## Key Warnings
+
+1. **The button is NOT a tactile switch** — it's open contact pads (cross-shaped dome switch). A rubber dome in the toy housing bridges the contacts when pressed.
+2. **The speaker IS routed through the ribbon cable** via purple and gray Dupont wires, not directly from the red/black wires.
+3. **Pi Zero 2 WH has pre-soldered headers** — no soldering on Pi side, use Dupont wires.
+4. **Pi has only 416 MB RAM** — don't run multiple heavy processes simultaneously.
+5. **USB audio card numbers change on reboot** — the voice assistant auto-detects by name.
+6. **TAF-MAIN-01 is fully bypassed** — don't waste time on it.
