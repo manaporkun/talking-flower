@@ -10,24 +10,32 @@
 | Soldering iron set (80W, LCD, 180-520C) | Solder wires to toy's sub-board | Done |
 | AstroAI digital multimeter | Identify pins, check speaker impedance | Done |
 | Micro-USB OTG adapter | USB devices to Pi | Done |
-| MAX98357A I2S amplifier/DAC | Speaker output via I2S GPIO (replaces UGREEN) | Ordered |
-| INMP441 I2S MEMS microphone | Mic input via I2S GPIO | Ordered |
+| Google AIY VoiceHAT v1 | Provides MAX98357A I2S amp (speaker) + mic (unused) | Done |
+| USB Audio Device (C-Media) | Temporary mic input until INMP441 arrives | Done |
+| INMP441 I2S MEMS microphone | Mic input via I2S GPIO (will replace USB mic) | Ordered |
 
 ### Previously used (being replaced)
 
 | Item | Replaced by |
 |------|-------------|
-| UGREEN USB sound card | MAX98357A (output) + INMP441 (input) |
+| UGREEN USB sound card | MAX98357A (output) + INMP441 (input, pending) |
+
+### Current temporary setup
+
+| Item | Purpose | Card |
+|------|---------|------|
+| Google AIY VoiceHAT v1 | Provides MAX98357A I2S amp for speaker output | card 1 (MAX98357A) |
+| USB Audio Device (C-Media) | Mic input (temporary until INMP441 arrives) | card 0 |
 
 ## Architecture
 
-All audio goes through the Pi's GPIO via I2S — no USB audio:
+Speaker output via I2S (MAX98357A on VoiceHAT), mic input via USB:
 
 ```
-INMP441 mic ──(I2S)──> Pi GPIO ──(I2S)──> MAX98357A ──> Toy speaker
-                          │
-                     Button (GPIO17)
-                     (dome switch on TAF-SUB-01)
+USB C-Media mic ──(USB)──> Pi ──(I2S)──> MAX98357A (VoiceHAT) ──> Toy speaker
+                            │
+                       Button (GPIO17)
+                       (dome switch on TAF-SUB-01)
 ```
 
 ## Toy PCB Details
@@ -111,14 +119,81 @@ Then connect MAX98357A speaker output (+/-) to **purple** and **gray** Dupont wi
 ### Enabling I2S on the Pi
 
 ```bash
-# Add to /boot/firmware/config.txt
-dtoverlay=googlevoicehat-soundcard  # or hifiberry-dac for MAX98357A
-
-# Reboot
-sudo reboot
+# /boot/firmware/config.txt
+dtparam=i2s=on
+dtoverlay=max98357a          # Clean MAX98357A driver (NOT googlevoicehat-soundcard)
 ```
 
-Exact overlay configuration will be finalized when boards arrive.
+**IMPORTANT:** Do NOT use `dtoverlay=googlevoicehat-soundcard`. The VoiceHAT driver has its
+own amp enable/disable codec (`voicehat-codec`) that causes cracking and popping. The clean
+`max98357a` overlay drives the same hardware without the codec overhead.
+
+### ALSA Configuration (~/.asoundrc)
+
+The Pi Zero 2W has a known over-amplification bug with MAX98357A — audio is pushed too hot
+at the I2S level. The fix is a `softvol` ALSA layer to attenuate the signal:
+
+```
+pcm.dmixer {
+    type dmix
+    ipc_key 1024
+    slave {
+        pcm "hw:1,0"              # MAX98357A card (check with aplay -l)
+        period_size 2048
+        buffer_size 16384
+        rate 48000
+        channels 1                # MAX98357A is MONO — stereo causes crackling
+        format S32_LE
+    }
+}
+
+pcm.softvol {
+    type softvol
+    slave.pcm "dmixer"
+    control { name "SoftMaster"; card 1 }
+    min_dB -40.0
+    max_dB 0.0
+}
+
+pcm.speaker {
+    type plug
+    slave.pcm "softvol"
+}
+```
+
+Key points:
+- **dmix** allows multiple audio streams (silence streamer + actual audio) to share the device
+- **softvol** at ~90% (value 230/255) tames the Pi Zero 2W over-amplification
+- **channels 1** is critical — the toy has a single mono speaker; sending stereo causes artifacts
+- A background silence streamer (`aplay -D speaker -f S16_LE -r 48000 -c 1 /dev/zero`)
+  keeps the I2S clock running so the amp never powers off (prevents power-on/off pop)
+
+### USB Mic (C-Media) Settings
+
+```bash
+# Max capture volume (+23dB) — the default is too quiet
+amixer -c 0 cset numid=8 35
+
+# Enable Auto Gain Control
+amixer -c 0 cset numid=9 1
+
+# Persist across reboots
+sudo alsactl store
+```
+
+The voice assistant pipeline also applies: highpass filter (200Hz, removes hum) +
+noise gate (suppresses background noise) + normalization before sending to STT.
+
+### Audio Card Numbers (after reboot with max98357a overlay)
+
+Card numbers are assigned by the kernel at boot and may change if USB devices are
+unplugged/replugged. Current layout:
+
+| Card | Device | Used for |
+|------|--------|----------|
+| 0 | USB Audio Device (C-Media) | Mic input |
+| 1 | MAX98357A | Speaker output (I2S) |
+| 2 | vc4-hdmi | HDMI audio (unused) |
 
 ## Progress
 
@@ -132,15 +207,13 @@ Exact overlay configuration will be finalized when boards arrive.
 | Identify all wire functions with multimeter | Done |
 | Connect button to Pi GPIO17 | Done |
 | Test button via GPIO | Done |
-| Connect speaker to UGREEN (temporary) | Done |
-| Test audio output | Done (low volume without amp) |
+| Connect speaker via MAX98357A I2S amp | Done |
 | Voice assistant software | Done |
 | PicoClaw integration + character | Done |
-| Wire MAX98357A for I2S speaker output | Waiting for parts |
+| Full loop (button -> voice -> response -> speaker) | Done |
+| Audio quality tuning (mono, softvol, noise gate) | Done |
 | Wire INMP441 for I2S mic input | Waiting for parts |
-| Enable I2S overlays on Pi | Waiting for parts |
-| Test full loop (button → voice → response → speaker) | Waiting for parts |
-| Final assembly inside toy | Waiting for parts |
+| Final assembly inside toy | Future |
 | Figure out blue wire function | Future |
 | Reuse LED pads for effects | Future |
 
@@ -150,5 +223,9 @@ Exact overlay configuration will be finalized when boards arrive.
 2. **The speaker IS routed through the ribbon cable** via purple and gray Dupont wires, not directly from the red/black wires.
 3. **Pi Zero 2 WH has pre-soldered headers** — no soldering on Pi side, use Dupont wires.
 4. **Pi has only 416 MB RAM** — don't run multiple heavy processes simultaneously.
-5. **USB audio card numbers change on reboot** — the voice assistant auto-detects by name.
-6. **TAF-MAIN-01 is fully bypassed** — don't waste time on it.
+5. **Do NOT use googlevoicehat-soundcard overlay** — causes cracking. Use `max98357a` overlay instead.
+6. **Toy speaker is mono** — always output mono audio (channels=1). Sending stereo to a single speaker causes crackling artifacts.
+7. **Pi Zero 2W over-amplifies I2S** — use ALSA softvol to attenuate. Without it, audio is distorted.
+8. **USB mic needs max capture volume** — default is too quiet. Set numid=8 to 35 and enable AGC.
+9. **Card numbers change** — always verify with `aplay -l` / `arecord -l` after hardware changes.
+10. **TAF-MAIN-01 is fully bypassed** — don't waste time on it.

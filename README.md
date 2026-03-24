@@ -1,35 +1,66 @@
 # Talking Flower
 
-Turn a Nintendo Talking Flower toy into an AI-powered voice assistant using a Raspberry Pi Zero 2 W and [PicoClaw](https://github.com/sipeed/picoclaw).
+Turn a Nintendo Talking Flower toy into an AI-powered voice assistant using a Raspberry Pi Zero 2 W.
 
-Press the button on the flower, say something, and it responds with a personality-rich voice — powered by an LLM with a Talking Flower character from Super Mario Bros. Wonder.
+Press the button on the flower, say something, and it responds in character — as a cheerful, sassy Talking Flower from Super Mario Bros. Wonder.
+
+<p align="center">
+  <img src="docs/images/flower-with-mic.jpg" alt="Talking Flower with microphone" width="600">
+</p>
 
 ## How It Works
 
 ```
-Button press → Record (I2S mic) → STT → LLM (PicoClaw) → TTS → Speaker (I2S amp)
+Button press -> Record audio -> Speech-to-Text -> LLM -> Text-to-Speech -> Speaker
 ```
 
-1. **Press the physical button** on the flower (or Space key for dev)
-2. **Speak** — recording auto-stops when you stop talking (voice activity detection)
-3. **Transcription** via ElevenLabs Scribe or OpenAI Whisper
-4. **LLM response** through PicoClaw (supports any model — Kimi, GPT, Claude, etc.)
-5. **Text-to-speech** via ElevenLabs v3 with emotional audio tags
-6. **Audio playback** through the flower's speaker via I2S amplifier
+1. Press the physical button on the flower (the original toy button, wired to GPIO)
+2. Speak — the recording is sent to ElevenLabs Scribe for transcription
+3. The transcript goes to an LLM via [PicoClaw](https://github.com/sipeed/picoclaw), which manages the character persona and tool access
+4. The LLM response is synthesized with ElevenLabs v3 TTS (with expressive audio tags like `[gasps]`, `[whispers]`, `[excited]`)
+5. Audio plays through the toy's original speaker via an I2S amplifier
 
-The flower has a character: **Flowey**, a cheerful, sassy Talking Flower who gasps at everything, whispers secrets, and makes flower puns. The character is defined in PicoClaw's persona files and can be fully customized.
+The flower has a character: **Flowey** — a cheerful, sassy little flower who gasps at everything, whispers secrets, and makes flower puns. The character is fully defined in Markdown files and easy to customize.
+
+## The Build
+
+### Teardown
+
+The toy has two PCBs connected by a ribbon cable. The main board (TAF-MAIN-01) has the original processor and is bypassed entirely. The sub-board (TAF-SUB-01) has the button (a dome switch, not a tactile switch) and speaker connections.
+
+<p align="center">
+  <img src="docs/images/main-board-side-a.jpg" alt="Main board Side A" width="400">
+  <img src="docs/images/sub-board-button-speaker.jpg" alt="Sub board with button and speaker" width="400">
+</p>
+
+### Soldering
+
+The ribbon cable was desoldered from the main board, and Dupont wires were soldered directly to the sub-board pads. A multimeter was used to map each wire to its function (button, speaker, unknown).
+
+<p align="center">
+  <img src="docs/images/sub-board-soldered.jpg" alt="Sub board with Dupont wires soldered" width="400">
+  <img src="docs/images/solder-closeup.jpg" alt="Close-up of solder joints" width="400">
+</p>
+
+### Assembly
+
+The Pi Zero 2 W sits on top of the toy with an I2S amplifier (MAX98357A) driving the original 8-ohm speaker through the sub-board traces. A USB mic handles voice input for now (an INMP441 I2S MEMS mic is planned).
+
+<p align="center">
+  <img src="docs/images/flower-wiring-back.jpg" alt="Wiring on the back of the flower" width="400">
+  <img src="docs/images/workspace-overview.jpg" alt="Workspace with all components" width="400">
+</p>
 
 ## Features
 
+- **Push-to-talk** via the toy's original button (GPIO dome switch)
 - **Voice activity detection** — auto-stops recording when you stop speaking
 - **Sentence-pipelined TTS** — first sentence plays while the rest generate
-- **GPIO button support** — use the toy's physical button, auto-detects GPIO
-- **I2S audio** — digital mic + amp via GPIO, no USB sound card needed
-- **Time-aware greetings** — "Good morning!" vs "Still up? Go to sleep!"
-- **Idle chatter** — Flowey talks randomly when nobody's around, just like in the game
-- **Dual STT support** — ElevenLabs Scribe or OpenAI Whisper
-- **Character system** — personality defined in Markdown files, easy to customize
 - **ElevenLabs v3 audio tags** — `[gasps]`, `[whispers]`, `[excited]` in responses
+- **Time-aware greetings** — "Good morning!" vs "Still up? Go to sleep..."
+- **Idle chatter** — Flowey talks randomly when nobody's around, just like in the game
+- **Character system** — personality defined in Markdown files, easy to customize
+- **I2S audio output** — digital amp via GPIO, drives the toy's built-in speaker
 - **Auto-start on boot** — systemd services for headless operation
 - **WiFi watchdog** — auto-reconnects if WiFi drops
 
@@ -38,26 +69,25 @@ The flower has a character: **Flowey**, a cheerful, sassy Talking Flower who gas
 | Component | Purpose |
 |-----------|---------|
 | Nintendo Talking Flower toy | Enclosure, button, speaker |
-| Raspberry Pi Zero 2 WH | Brain |
-| MAX98357A I2S amplifier | Speaker output (DAC + amp, via GPIO) |
-| INMP441 I2S MEMS microphone | Voice input (via GPIO) |
-| Dupont jumper wires | Connecting everything |
+| Raspberry Pi Zero 2 WH | Compute |
+| MAX98357A I2S amplifier | Speaker output (DAC + amp via GPIO) |
+| USB C-Media mic (temporary) | Voice input (INMP441 I2S mic planned) |
+| Google AIY VoiceHAT v1 | Provides the MAX98357A breakout |
 
-No USB sound card needed — all audio is digital via I2S on the GPIO header.
+See [docs/hardware.md](docs/hardware.md) for the full wiring guide, ALSA configuration, and audio tuning notes.
 
-See [docs/hardware.md](docs/hardware.md) for the full wiring guide.
+### Wiring Summary
 
-**TL;DR wiring:**
-- Button → GPIO17 + GND
-- MAX98357A → GPIO18, 19, 21 + 5V + GND → toy speaker
-- INMP441 → GPIO18, 19, 20 + 3.3V + GND
+- **Button**: GPIO17 + GND (dome switch on sub-board)
+- **Speaker**: MAX98357A I2S amp -> GPIO18 (BCLK), GPIO19 (LRC), GPIO21 (DIN) -> toy speaker via sub-board traces
+- **Mic**: USB C-Media (card 0) — will be replaced by INMP441 on GPIO18, 19, 20
 
 ## Quick Start
 
 ### Prerequisites
 
 - Raspberry Pi Zero 2 W (or any Pi with GPIO)
-- MAX98357A I2S amplifier + INMP441 I2S microphone
+- MAX98357A I2S amplifier connected to the speaker
 - [PicoClaw](https://github.com/sipeed/picoclaw) installed
 - ElevenLabs API key ([elevenlabs.io](https://elevenlabs.io))
 
@@ -78,27 +108,27 @@ cp .env.example .env
 nano .env  # Add your API keys and preferences
 ```
 
-### Copy PicoClaw Persona Files
+### Set Up the Character
 
 ```bash
-cp picoclaw/SOUL.md ~/.picoclaw/workspace/
-cp picoclaw/IDENTITY.md ~/.picoclaw/workspace/
-cp picoclaw/AGENTS.md ~/.picoclaw/workspace/
-cp picoclaw/USER.md.example ~/.picoclaw/workspace/USER.md
-nano ~/.picoclaw/workspace/USER.md  # Personalize
+cp character/SOUL.md ~/.picoclaw/workspace/
+cp character/IDENTITY.md ~/.picoclaw/workspace/
+cp character/AGENTS.md ~/.picoclaw/workspace/
+cp character/USER.md.example ~/.picoclaw/workspace/USER.md
+nano ~/.picoclaw/workspace/USER.md  # Personalize for your setup
 ```
 
 ### Run
 
 ```bash
-# Start PicoClaw gateway (for Telegram integration, optional)
+# Start PicoClaw gateway
 picoclaw gateway &
 
 # Start the voice assistant
 ./scripts/start.sh
 ```
 
-### Run on Boot (Optional)
+### Run on Boot
 
 ```bash
 sudo cp systemd/picoclaw-gateway.service /etc/systemd/system/
@@ -117,36 +147,45 @@ The flower's personality lives in four Markdown files in PicoClaw's workspace:
 | `SOUL.md` | Personality, voice rules, audio tag usage |
 | `IDENTITY.md` | Name, description, purpose |
 | `AGENTS.md` | Direct behavioral instructions |
-| `USER.md` | Info about you (location, preferences) |
+| `USER.md` | Info about the user (location, preferences) |
 
-Edit these to create any character you want — a pirate, a robot, a grumpy cat. The ElevenLabs v3 audio tags (`[whispers]`, `[laughs]`, `[gasps]`, `[excited]`, `[sarcastic]`) work with any character.
+Edit these to create any character — a pirate, a robot, a grumpy cat. The ElevenLabs v3 audio tags (`[whispers]`, `[laughs]`, `[gasps]`, `[excited]`, `[sarcastic]`) work with any character.
+
+## Audio Configuration Notes
+
+The Pi Zero 2W has some known audio quirks with the MAX98357A. See [docs/hardware.md](docs/hardware.md) for details, but the key points:
+
+- Use `dtoverlay=max98357a` (not `googlevoicehat-soundcard`)
+- Output **mono** audio — the toy has a single speaker; stereo causes artifacts
+- Use ALSA `softvol` to tame the Pi Zero 2W's over-amplification
+- A background silence stream keeps the I2S clock alive (prevents amp power-on pop)
+- USB mic needs max capture volume (+23dB) and AGC enabled
 
 ## Project Structure
 
 ```
 talking-flower/
-├── README.md
-├── LICENSE
-├── docs/
-│   └── hardware.md              # Wiring guide + BOM
-├── picoclaw/
-│   ├── SOUL.md                  # Character personality
-│   ├── IDENTITY.md              # Character identity
-│   ├── AGENTS.md                # Behavioral instructions
-│   └── USER.md.example          # User info template
 ├── voice-assistant/
 │   ├── voice_assistant.py       # Main application
 │   ├── idle_chatter.py          # Random idle lines + time greetings
 │   ├── .env.example             # Config template
 │   └── requirements.txt
+├── character/
+│   ├── SOUL.md                  # Flowey's personality
+│   ├── IDENTITY.md              # Character identity
+│   ├── AGENTS.md                # Behavioral instructions
+│   └── USER.md.example          # User info template
 ├── scripts/
 │   ├── setup.sh                 # Install dependencies
 │   ├── start.sh                 # Launch everything
 │   ├── wifi-watchdog.sh         # Auto-reconnect WiFi
 │   └── cleanup.sh               # Log rotation + session cleanup
-└── systemd/
-    ├── picoclaw-gateway.service
-    └── talking-flower.service
+├── systemd/
+│   ├── picoclaw-gateway.service
+│   └── talking-flower.service
+└── docs/
+    ├── hardware.md              # Wiring guide + audio config
+    └── images/                  # Build photos
 ```
 
 ## Configuration
@@ -162,11 +201,13 @@ All config is in `voice-assistant/.env`:
 | `GPIO_BUTTON_PIN` | `17` | GPIO pin for physical button |
 | `SILENCE_DURATION` | `1.5` | Seconds of silence before auto-stop |
 | `IDLE_CHATTER` | `1` | Enable random idle comments |
-| `IDLE_INTERVAL_MIN` | `5` | Min minutes between idle lines |
-| `IDLE_INTERVAL_MAX` | `15` | Max minutes between idle lines |
 | `STARTUP_MESSAGE` | | What Flowey says on boot (or auto time-greeting) |
 
 See `.env.example` for the complete list.
+
+## Related
+
+This project contributed an [ElevenLabs TTS skill](https://github.com/sipeed/picoclaw/pull/1905) upstream to PicoClaw, enabling any PicoClaw agent to use ElevenLabs text-to-speech.
 
 ## License
 
