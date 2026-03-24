@@ -8,6 +8,19 @@ Press the button on the flower, say something, and it responds in character — 
   <img src="docs/images/flower-with-mic.jpg" alt="Talking Flower with microphone" width="600">
 </p>
 
+## One Button, Four Tricks
+
+The toy's original dome switch button does everything:
+
+| Gesture | What happens |
+|---------|-------------|
+| **Hold** | Push-to-talk — speak, release, get a response |
+| **Tap** | Random one-liner — "You poked me!", "Boing!", "That tickles!" |
+| **Double tap** | Toggle idle chatter on/off (Flowey confirms out loud) |
+| **Triple tap** | Wipe conversation memory and start fresh |
+
+15 pre-recorded quips on tap. Flowey chatters on his own every few minutes when idle — just like the flowers in Wonder.
+
 ## How It Works
 
 ```
@@ -20,7 +33,7 @@ Button press -> Record audio -> Speech-to-Text -> LLM -> Text-to-Speech -> Speak
 4. The LLM response is synthesized with ElevenLabs v3 TTS (with expressive audio tags like `[gasps]`, `[whispers]`, `[excited]`)
 5. Audio plays through the toy's original speaker via an I2S amplifier
 
-The flower has a character: **Flowey** — a cheerful, sassy little flower who gasps at everything, whispers secrets, and makes flower puns. The character is fully defined in Markdown files and easy to customize.
+The flower has a character: **Flowey** — a cheerful, sassy little flower who gasps at everything, whispers secrets, and makes flower puns. Conversations persist across reboots — Flowey remembers what you told it yesterday.
 
 ## The Build
 
@@ -207,19 +220,6 @@ All config is in `voice-assistant/.env`:
 | `STARTUP_MESSAGE` | | What Flowey says on boot (or auto time-greeting) |
 
 See `.env.example` for the complete list.
-
-## Button Gestures (GPIO Mode)
-
-The toy's original dome switch button supports multiple gestures:
-
-| Gesture | Action |
-|---------|--------|
-| **Hold** | Push-to-talk — record while held, release to send |
-| **Single tap** | Play a random pre-recorded Flowey quip |
-| **Double tap** | Toggle idle chatter on/off (with voice confirmation) |
-| **Triple tap** | Clear conversation memory and start fresh |
-
-Tap threshold is 0.3s — anything shorter is a tap, longer is a PTT hold.
 
 ## Related
 
