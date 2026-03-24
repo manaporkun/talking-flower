@@ -7,3 +7,5 @@ __pycache__/
 response_*.mp3
 speak_tmp.mp3
 last_input.wav
+imgs/
+.DS_Store
