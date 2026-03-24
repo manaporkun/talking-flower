@@ -65,7 +65,7 @@ The toy has two PCBs connected by a 6-wire ribbon cable.
 | **White** | Button (side 2) | Continuity with button contact pad |
 | **Purple** | Speaker (one side) | Resistance: purple+gray reads 7-16 ohm (8 ohm speaker coil) |
 | **Gray** | Speaker (other side) | Same as above |
-| **Blue** | Unknown | Not button, not speaker. Possibly battery/power or LED. |
+| **Blue** | Battery (likely) | Not button, not speaker. Likely battery/power connection. |
 
 **Key findings:**
 - The speaker IS routed through the ribbon cable via purple and gray wires
