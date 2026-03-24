@@ -5,7 +5,11 @@ Turn a Nintendo Talking Flower toy into an AI-powered voice assistant using a Ra
 Press the button on the flower, say something, and it responds in character — as a cheerful, sassy Talking Flower from Super Mario Bros. Wonder.
 
 <p align="center">
-  <img src="docs/images/flower-with-mic.jpg" alt="Talking Flower with microphone" width="600">
+  <a href="https://youtu.be/njyr6QNPWzk">
+    <img src="docs/images/flower-with-mic.jpg" alt="Watch the demo" width="600">
+  </a>
+  <br>
+  <a href="https://youtu.be/njyr6QNPWzk">Watch the demo on YouTube</a>
 </p>
 
 ## One Button, Four Tricks
