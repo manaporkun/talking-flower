@@ -2,7 +2,7 @@
 
 Turn a Nintendo Talking Flower toy into an AI-powered voice assistant using a Raspberry Pi Zero 2 W.
 
-Press the button on the flower, say something, and it responds in character — as a cheerful, sassy Talking Flower from Super Mario Bros. Wonder.
+Press the button on the flower, say something, and it responds in character — as a sassy, jealous, attention-hungry Talking Flower from Super Mario Bros. Wonder. It has attitude, gets jealous of Alexa, and guilt-trips you when you ignore it.
 
 <p align="center">
   <a href="https://youtu.be/njyr6QNPWzk">
@@ -23,7 +23,7 @@ The toy's original dome switch button does everything:
 | **Double tap** | Toggle idle chatter on/off (Flowey confirms out loud) |
 | **Triple tap** | Wipe conversation memory and start fresh |
 
-15 pre-recorded quips on tap. Flowey chatters on his own every few minutes when idle — just like the flowers in Wonder.
+15 pre-recorded quips on tap. Flowey chatters on his own every few minutes when idle — just like the flowers in Wonder. 28 pre-recorded idle lines covering boredom, jealousy, passive-aggression, and self-hype.
 
 ## How It Works
 
@@ -37,7 +37,7 @@ Button press -> Record audio -> Speech-to-Text -> LLM -> Text-to-Speech -> Speak
 4. The LLM response is synthesized with ElevenLabs v3 TTS (with expressive audio tags like `[gasps]`, `[whispers]`, `[excited]`)
 5. Audio plays through the toy's original speaker via an I2S amplifier
 
-The flower has a character: **Flowey** — a cheerful, sassy little flower who gasps at everything, whispers secrets, and makes flower puns. Conversations persist across reboots — Flowey remembers what you told it yesterday.
+The flower has a character: **Flowey** — a sassy, opinionated little flower with a diva streak. It gasps at everything, gets jealous of other voice assistants, guilt-trips you when ignored, and makes flower puns. But underneath the attitude, it genuinely cares. Conversations persist across reboots — Flowey remembers what you told it yesterday.
 
 ## The Build
 
@@ -154,13 +154,31 @@ sudo systemctl enable picoclaw-gateway talking-flower
 sudo systemctl start picoclaw-gateway talking-flower
 ```
 
+## Deploying Changes
+
+After editing character files or idle chatter lines, deploy to the Pi:
+
+```bash
+# On the Pi
+cd ~/talking-flower
+bash deploy.sh
+```
+
+This pulls the latest from git and syncs character files to PicoClaw's workspace. Character changes take effect immediately (read per-request). If you changed `voice_assistant.py`, restart the service:
+
+```bash
+sudo systemctl restart voice-assistant
+```
+
+For new idle chatter audio, regenerate WAVs from the updated lines and upload to `~/.picoclaw/workspace/skills/flowey-telegram-voice/idle_wav/`. The voice assistant picks up new WAV files at runtime without restart.
+
 ## Customizing the Character
 
 The flower's personality lives in four Markdown files in PicoClaw's workspace:
 
 | File | Purpose |
 |------|---------|
-| `SOUL.md` | Personality, voice rules, audio tag usage |
+| `SOUL.md` | Personality (attitude, jealousy, neglect reactions), voice rules, audio tags |
 | `IDENTITY.md` | Name, description, purpose |
 | `AGENTS.md` | Direct behavioral instructions |
 | `USER.md` | Info about the user (location, preferences) |
@@ -190,6 +208,7 @@ talking-flower/
 │       ├── thinking/            # Filler sounds while LLM is processing
 │       ├── quips/               # One-liners for button tap Easter eggs
 │       └── indicators/          # Toggle confirmation sounds
+├── deploy.sh                    # Pull git + sync character files to Pi
 ├── character/
 │   ├── SOUL.md                  # Flowey's personality
 │   ├── IDENTITY.md              # Character identity
