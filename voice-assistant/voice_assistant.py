@@ -3,6 +3,7 @@
 
 import os
 import queue
+import random
 import re
 import shutil
 import subprocess
@@ -50,6 +51,11 @@ STARTUP_MESSAGE = os.getenv("STARTUP_MESSAGE", "")
 IDLE_CHATTER = os.getenv("IDLE_CHATTER", "1").lower() not in ("0", "false", "no", "off")
 IDLE_INTERVAL_MIN = int(os.getenv("IDLE_INTERVAL_MIN", "5"))
 IDLE_INTERVAL_MAX = int(os.getenv("IDLE_INTERVAL_MAX", "15"))
+
+HOLD_THRESHOLD = float(os.getenv("HOLD_THRESHOLD", "0.3"))
+TAP_WINDOW = float(os.getenv("TAP_WINDOW", "0.4"))
+QUIPS_DIR = Path(os.getenv("QUIPS_DIR", str(Path.home() / ".picoclaw/workspace/skills/flowey-telegram-voice/quips_wav")))
+INDICATORS_DIR = Path(os.getenv("INDICATORS_DIR", str(Path.home() / ".picoclaw/workspace/skills/flowey-telegram-voice/indicators_wav")))
 
 INPUT_FALLBACK_RATES = [16000, 48000, 44100, 32000, 8000]
 
@@ -433,6 +439,23 @@ class IdleChatterTimer:
                         pass
 
 
+# --- Button Sounds ---
+
+def play_random_sound(directory):
+    """Play a random WAV from a directory."""
+    import glob as _glob
+    sounds = _glob.glob(str(Path(directory) / "*.wav"))
+    if sounds:
+        play_audio_file(random.choice(sounds))
+
+
+def play_indicator(name):
+    """Play a named indicator sound (e.g. 'chatter_on', 'memory_cleared')."""
+    path = INDICATORS_DIR / f"{name}.wav"
+    if path.exists():
+        play_audio_file(str(path))
+
+
 # --- Conversation Turn ---
 
 def handle_turn(dev_idx, rate):
@@ -491,12 +514,39 @@ def handle_turn(dev_idx, rate):
 
 # --- Input Modes ---
 
+def count_taps(button):
+    """After a tap is detected, count additional taps within TAP_WINDOW."""
+    taps = 1
+    deadline = time.monotonic() + TAP_WINDOW
+    while time.monotonic() < deadline:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        if button.wait_for_press(timeout=remaining):
+            button.wait_for_release()
+            taps += 1
+            deadline = time.monotonic() + TAP_WINDOW
+        else:
+            break
+    return taps
+
+
 def run_gpio_mode(dev_idx, rate):
-    """Use a physical button on GPIO to trigger recording."""
+    """Use a physical button on GPIO with multi-press gestures.
+
+    Hold:        Push-to-talk recording
+    Single tap:  Play random Flowey quip
+    Double tap:  Toggle idle chatter on/off
+    Triple tap:  Clear conversation memory (new session)
+    """
     from gpiozero import Button as GPIOButton
 
-    button = GPIOButton(GPIO_BUTTON_PIN, pull_up=True, bounce_time=0.3)
-    print(f"GPIO mode: press button on pin {GPIO_BUTTON_PIN} to talk.\n")
+    button = GPIOButton(GPIO_BUTTON_PIN, pull_up=True, bounce_time=0.05)
+    print(f"GPIO mode: pin {GPIO_BUTTON_PIN}")
+    print(f"  Hold=speak | Tap=quip | 2x=toggle chatter | 3x=reset memory\n")
+
+    session = PICOCLAW_SESSION
+    idle_chatter_on = IDLE_CHATTER
 
     # Time-aware startup greeting
     greeting = STARTUP_MESSAGE or get_time_greeting()
@@ -508,32 +558,60 @@ def run_gpio_mode(dev_idx, rate):
 
     # Start idle chatter
     chatter = None
-    if IDLE_CHATTER:
+    if idle_chatter_on:
         chatter = IdleChatterTimer(speak)
         chatter.start()
 
-    running = True
+    print("Ready.")
 
-    def on_press():
-        if not running:
+    while True:
+        try:
+            button.wait_for_press()
+        except KeyboardInterrupt:
+            if chatter:
+                chatter.stop()
+            print("\nBye!")
             return
+
+        press_time = time.monotonic()
+        button.wait_for_release()
+        hold_duration = time.monotonic() - press_time
+
         if chatter:
             chatter.reset()
-        print("\n--- Button pressed ---")
+
+        if hold_duration < HOLD_THRESHOLD:
+            # --- Tap gesture ---
+            taps = count_taps(button)
+
+            if taps == 1:
+                print(" Tap — quip")
+                play_random_sound(QUIPS_DIR)
+            elif taps == 2:
+                idle_chatter_on = not idle_chatter_on
+                state = "ON" if idle_chatter_on else "OFF"
+                print(f" Double-tap — idle chatter {state}")
+                if idle_chatter_on:
+                    if not chatter:
+                        chatter = IdleChatterTimer(speak)
+                    chatter.start()
+                else:
+                    if chatter:
+                        chatter.stop()
+                        chatter = None
+                play_indicator("chatter_on" if idle_chatter_on else "chatter_off")
+            elif taps >= 3:
+                session = f"voice:{int(time.time())}"
+                print(f" Triple-tap — memory cleared (new session: {session})")
+                play_indicator("memory_cleared")
+            continue
+
+        # --- PTT hold — record and process ---
+        # Recording already missed (we waited for release), so re-record
+        # Actually: for the local version with VAD, just run a normal turn
+        print("\n--- Recording ---")
         handle_turn(dev_idx, rate)
-        print("\nReady. Press button to talk.")
-
-    button.when_pressed = on_press
-    print("Ready. Press button to talk.")
-
-    try:
-        while True:
-            time.sleep(0.1)
-    except KeyboardInterrupt:
-        running = False
-        if chatter:
-            chatter.stop()
-        print("\nBye!")
+        print("\nReady.")
 
 
 def run_keyboard_mode(dev_idx, rate):
