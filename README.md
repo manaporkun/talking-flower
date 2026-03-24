@@ -35,11 +35,10 @@ The toy has two PCBs connected by a ribbon cable. The main board (TAF-MAIN-01) h
 
 ### Soldering
 
-The ribbon cable was desoldered from the main board, and Dupont wires were soldered directly to the sub-board pads. A multimeter was used to map each wire to its function (button, speaker, unknown).
+The ribbon cable was desoldered from the main board, and Dupont wires were soldered directly to the sub-board pads. A multimeter was used to map each wire to its function (button, speaker, battery).
 
 <p align="center">
   <img src="docs/images/sub-board-soldered.jpg" alt="Sub board with Dupont wires soldered" width="400">
-  <img src="docs/images/solder-closeup.jpg" alt="Close-up of solder joints" width="400">
 </p>
 
 ### Assembly
@@ -48,7 +47,6 @@ The Pi Zero 2 W sits on top of the toy with an I2S amplifier (MAX98357A) driving
 
 <p align="center">
   <img src="docs/images/flower-wiring-back.jpg" alt="Wiring on the back of the flower" width="400">
-  <img src="docs/images/workspace-overview.jpg" alt="Workspace with all components" width="400">
 </p>
 
 ## Features
