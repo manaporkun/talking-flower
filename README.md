@@ -51,7 +51,8 @@ The Pi Zero 2 W sits on top of the toy with an I2S amplifier (MAX98357A) driving
 
 ## Features
 
-- **Push-to-talk** via the toy's original button (GPIO dome switch)
+- **Multi-gesture button** — hold to talk, tap for quips, double-tap toggles chatter, triple-tap resets memory
+- **Pre-recorded Flowey quips** — 15 voiced one-liners on button tap ("You poked me!", "Boing!", etc.)
 - **Voice activity detection** — auto-stops recording when you stop speaking
 - **Sentence-pipelined TTS** — first sentence plays while the rest generate
 - **ElevenLabs v3 audio tags** — `[gasps]`, `[whispers]`, `[excited]` in responses
@@ -167,7 +168,11 @@ talking-flower/
 │   ├── voice_assistant.py       # Main application
 │   ├── idle_chatter.py          # Random idle lines + time greetings
 │   ├── .env.example             # Config template
-│   └── requirements.txt
+│   ├── requirements.txt
+│   └── sounds/
+│       ├── thinking/            # Filler sounds while LLM is processing
+│       ├── quips/               # One-liners for button tap Easter eggs
+│       └── indicators/          # Toggle confirmation sounds
 ├── character/
 │   ├── SOUL.md                  # Flowey's personality
 │   ├── IDENTITY.md              # Character identity
@@ -202,6 +207,19 @@ All config is in `voice-assistant/.env`:
 | `STARTUP_MESSAGE` | | What Flowey says on boot (or auto time-greeting) |
 
 See `.env.example` for the complete list.
+
+## Button Gestures (GPIO Mode)
+
+The toy's original dome switch button supports multiple gestures:
+
+| Gesture | Action |
+|---------|--------|
+| **Hold** | Push-to-talk — record while held, release to send |
+| **Single tap** | Play a random pre-recorded Flowey quip |
+| **Double tap** | Toggle idle chatter on/off (with voice confirmation) |
+| **Triple tap** | Clear conversation memory and start fresh |
+
+Tap threshold is 0.3s — anything shorter is a tap, longer is a PTT hold.
 
 ## Related
 
