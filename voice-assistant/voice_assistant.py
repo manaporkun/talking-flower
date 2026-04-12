@@ -62,22 +62,15 @@ INPUT_FALLBACK_RATES = [16000, 48000, 44100, 32000, 8000]
 
 # --- Audio Device Detection ---
 
-def find_alsa_device_by_hint(hint):
+def find_alsa_device_by_hint(hint, cmd="aplay"):
     """Find ALSA plughw device string by name hint. Survives reboots."""
     try:
-        result = subprocess.run(["arecord", "-l"], capture_output=True, text=True)
+        result = subprocess.run([cmd, "-l"], capture_output=True, text=True)
         for line in result.stdout.split("\n"):
             if "card" in line and hint.lower() in line.lower():
                 card = line.split("card ")[1].split(":")[0].strip()
-                return f"plughw:{card},0"
-    except Exception:
-        pass
-    try:
-        result = subprocess.run(["aplay", "-l"], capture_output=True, text=True)
-        for line in result.stdout.split("\n"):
-            if "card" in line and hint.lower() in line.lower():
-                card = line.split("card ")[1].split(":")[0].strip()
-                return f"plughw:{card},0"
+                device = line.split("device ")[1].split(":")[0].strip()
+                return f"plughw:{card},{device}"
     except Exception:
         pass
     return None
@@ -85,7 +78,7 @@ def find_alsa_device_by_hint(hint):
 
 def resolve_output_device():
     """Find the ALSA output device by hint, falling back to default."""
-    dev = find_alsa_device_by_hint(OUTPUT_DEVICE_HINT)
+    dev = find_alsa_device_by_hint(OUTPUT_DEVICE_HINT, cmd="aplay")
     if dev:
         return dev
     return os.getenv("OUTPUT_DEVICE", "default")
