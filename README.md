@@ -6,7 +6,7 @@ Press the button on the flower, say something, and it responds in character — 
 
 <p align="center">
   <a href="https://youtu.be/njyr6QNPWzk">
-    <img src="docs/images/front.png" alt="Watch the demo" width="600">
+    <img src="docs/images/front.png" alt="Watch the demo" width="100">
   </a>
   <br>
   <a href="https://youtu.be/njyr6QNPWzk">Watch the demo on YouTube</a>
