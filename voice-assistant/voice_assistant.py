@@ -159,7 +159,7 @@ def record_until_silence(device_idx, rate, stop_check=None):
     try:
         while True:
             if stop_check and stop_check():
-                print(f"\r\033[K Stopped.", flush=True)
+                print("\r\033[K Stopped.", flush=True)
                 while not q.empty():
                     frames.append(q.get_nowait())
                 stream.stop()
@@ -169,7 +169,7 @@ def record_until_silence(device_idx, rate, stop_check=None):
                 return np.concatenate(frames, axis=0).squeeze(), rate
 
             if time.monotonic() - start_time > MAX_RECORD_SECONDS:
-                print(f"\r\033[K Max duration reached.", flush=True)
+                print("\r\033[K Max duration reached.", flush=True)
                 break
 
             try:
@@ -193,7 +193,7 @@ def record_until_silence(device_idx, rate, stop_check=None):
                     if silence_start is None:
                         silence_start = time.monotonic()
                     elif time.monotonic() - silence_start >= SILENCE_DURATION:
-                        print(f"\r\033[K Processing...", flush=True)
+                        print("\r\033[K Processing...", flush=True)
                         while not q.empty():
                             frames.append(q.get_nowait())
                         stream.stop()
@@ -206,7 +206,7 @@ def record_until_silence(device_idx, rate, stop_check=None):
                             audio = audio[:-trim]
                         return audio, rate
                 else:
-                    print(f"\r\033[K Listening...", end="", flush=True)
+                    print("\r\033[K Listening...", end="", flush=True)
 
     except KeyboardInterrupt:
         pass
@@ -577,7 +577,7 @@ def run_gpio_mode(dev_idx, rate):
 
     button = GPIOButton(GPIO_BUTTON_PIN, pull_up=True, bounce_time=0.05)
     print(f"GPIO mode: pin {GPIO_BUTTON_PIN}")
-    print(f"  Hold=speak | Tap=quip | 2x=toggle chatter | 3x=reset memory\n")
+    print("  Hold=speak | Tap=quip | 2x=toggle chatter | 3x=reset memory\n")
 
     session = PICOCLAW_SESSION
     idle_chatter_on = IDLE_CHATTER
