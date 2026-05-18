@@ -14,7 +14,7 @@ A Talking Flower from Super Mario Bros. Wonder, rebuilt around a Raspberry Pi Ze
 
 ## Why I built this
 
-I wanted to learn to solder and start doing hardware. Picking a Nintendo Talking Flower toy gave me a target with real constraints: an enclosure I had to fit inside, a button I had to wire to a GPIO pin, a speaker I had to drive without an amp, a ribbon cable I had to figure out. All I needed to add was a brain.
+I wanted to learn to solder and start doing hardware. Picking a Nintendo Talking Flower toy gave me a target with real constraints: an enclosure I had to fit inside, a button I had to wire to a GPIO pin, a speaker I had to drive cleanly through an I2S amp, a ribbon cable I had to figure out. All I needed to add was a brain.
 
 By the end I had desoldered a ribbon cable, mapped six unknown wires with a multimeter, wired an I2S amplifier, and tuned an ALSA stack to stop the audio from popping — none of which I knew how to do when I started.
 
@@ -177,7 +177,7 @@ cd ~/talking-flower
 bash deploy.sh
 ```
 
-Pulls latest from git and syncs character files to PicoClaw's workspace. Character changes take effect immediately. If `voice_assistant.py` changed, restart the service: `sudo systemctl restart voice-assistant`.
+Pulls latest from git and syncs character files to PicoClaw's workspace. Character changes take effect immediately. If `voice_assistant.py` changed, restart the service: `sudo systemctl restart talking-flower`.
 
 ### Customizing the character
 
