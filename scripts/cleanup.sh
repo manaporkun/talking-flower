@@ -3,15 +3,18 @@
 # Run via cron: 0 4 * * * /home/plue/talking-flower/scripts/cleanup.sh
 
 WORKSPACE="/home/plue/.picoclaw/workspace"
-VOICE_DIR="$WORKSPACE/voice-assistant"
+VOICE_DIR="/home/plue/talking-flower/voice-assistant"
 LOG="/tmp/talking-flower-cleanup.log"
 
 echo "$(date): Running cleanup..." >> "$LOG"
 
-# Clean temp audio files
-find "$VOICE_DIR" -name "response_*.mp3" -mmin +60 -delete 2>/dev/null
-find "$VOICE_DIR" -name "speak_tmp.mp3" -mmin +60 -delete 2>/dev/null
-find "$VOICE_DIR" -name "*.wav" -mmin +60 -delete 2>/dev/null
+# Clean temp audio files (written to CWD by voice_assistant.py).
+# WAV temps appear when mpg123 is missing and play_audio_file falls back to ffmpeg + aplay.
+find "$VOICE_DIR" -maxdepth 1 -name "response_*.mp3" -mmin +60 -delete 2>/dev/null
+find "$VOICE_DIR" -maxdepth 1 -name "response_*.wav" -mmin +60 -delete 2>/dev/null
+find "$VOICE_DIR" -maxdepth 1 -name "speak_tmp.mp3" -mmin +60 -delete 2>/dev/null
+find "$VOICE_DIR" -maxdepth 1 -name "speak_tmp.wav" -mmin +60 -delete 2>/dev/null
+find "$VOICE_DIR" -maxdepth 1 -name "last_input.wav" -mmin +60 -delete 2>/dev/null
 
 # Rotate gateway log if over 10MB
 GW_LOG="/tmp/picoclaw-gw.log"

@@ -59,6 +59,30 @@ INDICATORS_DIR = Path(os.getenv("INDICATORS_DIR", str(Path.home() / ".picoclaw/w
 
 INPUT_FALLBACK_RATES = [16000, 48000, 44100, 32000, 8000]
 
+# Serializes all audio output so idle chatter, quips, indicators, and replies
+# never overlap or trigger concurrent ElevenLabs calls.
+_audio_lock = threading.Lock()
+
+
+# --- Config validation ---
+
+def validate_config():
+    """Fail fast on missing/invalid config rather than mid-conversation."""
+    errors = []
+    if not ELEVENLABS_API_KEY:
+        errors.append("ELEVENLABS_API_KEY is not set")
+    if not ELEVENLABS_VOICE_ID:
+        errors.append("ELEVENLABS_VOICE_ID is not set")
+    if STT_PROVIDER not in ("elevenlabs", "openai"):
+        errors.append(f"STT_PROVIDER must be 'elevenlabs' or 'openai', got {STT_PROVIDER!r}")
+    if STT_PROVIDER == "openai" and not OPENAI_API_KEY:
+        errors.append("STT_PROVIDER=openai but OPENAI_API_KEY is not set")
+    if errors:
+        print("Configuration errors:", file=sys.stderr)
+        for e in errors:
+            print(f"  - {e}", file=sys.stderr)
+        sys.exit(1)
+
 
 # --- Audio Device Detection ---
 
@@ -71,8 +95,8 @@ def find_alsa_device_by_hint(hint, cmd="aplay"):
                 card = line.split("card ")[1].split(":")[0].strip()
                 device = line.split("device ")[1].split(":")[0].strip()
                 return f"plughw:{card},{device}"
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"ALSA device probe failed ({cmd}): {e}", file=sys.stderr)
     return None
 
 
@@ -114,8 +138,8 @@ OUTPUT_DEVICE = resolve_output_device()
 
 # --- Recording ---
 
-def record_until_silence(device_idx, rate):
-    """Record audio, auto-stop after silence following speech."""
+def record_until_silence(device_idx, rate, stop_check=None):
+    """Record audio. Stop on silence after speech, or when stop_check() is true."""
     q = queue.Queue()
     frames = []
     speech_detected = False
@@ -134,8 +158,18 @@ def record_until_silence(device_idx, rate):
 
     try:
         while True:
+            if stop_check and stop_check():
+                print("\r\033[K Stopped.", flush=True)
+                while not q.empty():
+                    frames.append(q.get_nowait())
+                stream.stop()
+                stream.close()
+                if not frames:
+                    return np.array([], dtype=np.float32), rate
+                return np.concatenate(frames, axis=0).squeeze(), rate
+
             if time.monotonic() - start_time > MAX_RECORD_SECONDS:
-                print(f"\r\033[K Max duration reached.", flush=True)
+                print("\r\033[K Max duration reached.", flush=True)
                 break
 
             try:
@@ -159,7 +193,7 @@ def record_until_silence(device_idx, rate):
                     if silence_start is None:
                         silence_start = time.monotonic()
                     elif time.monotonic() - silence_start >= SILENCE_DURATION:
-                        print(f"\r\033[K Processing...", flush=True)
+                        print("\r\033[K Processing...", flush=True)
                         while not q.empty():
                             frames.append(q.get_nowait())
                         stream.stop()
@@ -172,7 +206,7 @@ def record_until_silence(device_idx, rate):
                             audio = audio[:-trim]
                         return audio, rate
                 else:
-                    print(f"\r\033[K Listening...", end="", flush=True)
+                    print("\r\033[K Listening...", end="", flush=True)
 
     except KeyboardInterrupt:
         pass
@@ -247,12 +281,15 @@ def transcribe(wav_path):
 
 # --- LLM ---
 
-def ask_picoclaw(message):
+def ask_picoclaw(message, session=None):
     result = subprocess.run(
         [PICOCLAW_BIN, "agent", "-m", message,
-         "--model", PICOCLAW_MODEL, "-s", PICOCLAW_SESSION],
+         "--model", PICOCLAW_MODEL, "-s", session or PICOCLAW_SESSION],
         capture_output=True, text=True, timeout=120,
     )
+    if result.returncode != 0:
+        err = (result.stderr or result.stdout).strip() or f"exit {result.returncode}"
+        raise RuntimeError(f"picoclaw failed: {err}")
     output = result.stdout + result.stderr
     lines = output.split("\n")
     collecting = False
@@ -329,46 +366,48 @@ def play_audio_file(path):
 
 
 def speak_and_play(text):
-    chunks = split_sentences(text)
+    with _audio_lock:
+        chunks = split_sentences(text)
 
-    if len(chunks) == 1:
-        mp3_data = tts_chunk(chunks[0])
-        with open("response_0.mp3", "wb") as f:
-            f.write(mp3_data)
-        play_audio_file("response_0.mp3")
-        return
+        if len(chunks) == 1:
+            mp3_data = tts_chunk(chunks[0])
+            with open("response_0.mp3", "wb") as f:
+                f.write(mp3_data)
+            play_audio_file("response_0.mp3")
+            return
 
-    audio_queue = queue.Queue()
-    gen_done = threading.Event()
+        audio_queue = queue.Queue()
+        gen_done = threading.Event()
 
-    def generate_worker():
-        for i, chunk in enumerate(chunks):
+        def generate_worker():
+            for i, chunk in enumerate(chunks):
+                try:
+                    mp3_data = tts_chunk(chunk)
+                    path = f"response_{i}.mp3"
+                    with open(path, "wb") as f:
+                        f.write(mp3_data)
+                    audio_queue.put(path)
+                except Exception as e:
+                    print(f"\n  TTS error on chunk {i}: {e}", flush=True)
+            gen_done.set()
+
+        threading.Thread(target=generate_worker, daemon=True).start()
+
+        while True:
             try:
-                mp3_data = tts_chunk(chunk)
-                path = f"response_{i}.mp3"
-                with open(path, "wb") as f:
-                    f.write(mp3_data)
-                audio_queue.put(path)
-            except Exception as e:
-                print(f"\n  TTS error on chunk {i}: {e}", flush=True)
-        gen_done.set()
-
-    threading.Thread(target=generate_worker, daemon=True).start()
-
-    while True:
-        try:
-            play_audio_file(audio_queue.get(timeout=0.1))
-        except queue.Empty:
-            if gen_done.is_set() and audio_queue.empty():
-                break
+                play_audio_file(audio_queue.get(timeout=0.1))
+            except queue.Empty:
+                if gen_done.is_set() and audio_queue.empty():
+                    break
 
 
 def speak(text):
     """Convenience: TTS and play a single string."""
-    mp3_data = tts_chunk(text)
-    with open("speak_tmp.mp3", "wb") as f:
-        f.write(mp3_data)
-    play_audio_file("speak_tmp.mp3")
+    with _audio_lock:
+        mp3_data = tts_chunk(text)
+        with open("speak_tmp.mp3", "wb") as f:
+            f.write(mp3_data)
+        play_audio_file("speak_tmp.mp3")
 
 
 # --- Idle Chatter ---
@@ -428,8 +467,8 @@ class IdleChatterTimer:
                 if line:
                     try:
                         self._speak(line)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        print(f"Idle chatter error: {e}", flush=True)
 
 
 # --- Button Sounds ---
@@ -439,21 +478,23 @@ def play_random_sound(directory):
     import glob as _glob
     sounds = _glob.glob(str(Path(directory) / "*.wav"))
     if sounds:
-        play_audio_file(random.choice(sounds))
+        with _audio_lock:
+            play_audio_file(random.choice(sounds))
 
 
 def play_indicator(name):
     """Play a named indicator sound (e.g. 'chatter_on', 'memory_cleared')."""
     path = INDICATORS_DIR / f"{name}.wav"
     if path.exists():
-        play_audio_file(str(path))
+        with _audio_lock:
+            play_audio_file(str(path))
 
 
 # --- Conversation Turn ---
 
-def handle_turn(dev_idx, rate):
+def handle_turn(dev_idx, rate, session=None, stop_check=None):
     """One full conversation turn: record → transcribe → LLM → speak."""
-    audio, actual_rate = record_until_silence(dev_idx, rate)
+    audio, actual_rate = record_until_silence(dev_idx, rate, stop_check=stop_check)
 
     if audio.size == 0:
         print(" No audio captured.")
@@ -488,7 +529,7 @@ def handle_turn(dev_idx, rate):
 
     print(" Thinking...", end=" ", flush=True)
     try:
-        reply = ask_picoclaw(text)
+        reply = ask_picoclaw(text, session=session)
     except Exception as e:
         print(f"error: {e}")
         return
@@ -536,7 +577,7 @@ def run_gpio_mode(dev_idx, rate):
 
     button = GPIOButton(GPIO_BUTTON_PIN, pull_up=True, bounce_time=0.05)
     print(f"GPIO mode: pin {GPIO_BUTTON_PIN}")
-    print(f"  Hold=speak | Tap=quip | 2x=toggle chatter | 3x=reset memory\n")
+    print("  Hold=speak | Tap=quip | 2x=toggle chatter | 3x=reset memory\n")
 
     session = PICOCLAW_SESSION
     idle_chatter_on = IDLE_CHATTER
@@ -566,14 +607,13 @@ def run_gpio_mode(dev_idx, rate):
             print("\nBye!")
             return
 
-        press_time = time.monotonic()
-        button.wait_for_release()
-        hold_duration = time.monotonic() - press_time
-
         if chatter:
             chatter.reset()
 
-        if hold_duration < HOLD_THRESHOLD:
+        # Wait up to HOLD_THRESHOLD for release. Released first = tap; else = hold.
+        released = button.wait_for_release(timeout=HOLD_THRESHOLD)
+
+        if released:
             # --- Tap gesture ---
             taps = count_taps(button)
 
@@ -599,11 +639,11 @@ def run_gpio_mode(dev_idx, rate):
                 play_indicator("memory_cleared")
             continue
 
-        # --- PTT hold — record and process ---
-        # Recording already missed (we waited for release), so re-record
-        # Actually: for the local version with VAD, just run a normal turn
-        print("\n--- Recording ---")
-        handle_turn(dev_idx, rate)
+        # --- Hold: still pressed after HOLD_THRESHOLD. Record now, stop on release. ---
+        print("\n--- Recording (release to stop) ---")
+        handle_turn(dev_idx, rate, session=session,
+                    stop_check=lambda: not button.is_pressed)
+        button.wait_for_release()
         print("\nReady.")
 
 
@@ -665,6 +705,7 @@ def has_gpio():
 # --- Main ---
 
 def main():
+    validate_config()
     dev_idx, dev_name = resolve_input_device()
     rate = find_working_rate(dev_idx)
 
