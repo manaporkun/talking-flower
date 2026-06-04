@@ -40,42 +40,9 @@ By the end I had desoldered a ribbon cable, mapped six unknown wires with a mult
 
 ## The Build
 
-### Teardown
+How the toy was gutted and rebuilt — teardown, multimeter wire mapping, and assembly: [docs/build.md](docs/build.md).
 
-The toy has two PCBs connected by a 6-wire ribbon cable: a main board (TAF-MAIN-01) with the original processor, and a sub-board (TAF-SUB-01) with the button and speaker. The main board is bypassed entirely.
-
-<p align="center">
-  <img src="docs/images/main-board-side-a.jpg" alt="Original main board — discarded" width="400">
-  <img src="docs/images/sub-board-button-speaker.jpg" alt="Sub board with button contacts and speaker pads" width="400">
-</p>
-
-### Mapping the wires
-
-The ribbon cable had six wires with no documentation. I desoldered it from the main board and used a multimeter to figure out what each one did:
-
-| Wire | Function | How I figured it out |
-|------|----------|----------------------|
-| Black + White | Button (two sides) | Continuity across the dome switch contacts |
-| Purple + Gray | Speaker | Resistance read 7–16Ω, matching an 8Ω speaker coil |
-| Blue | Battery (likely) | Process of elimination — not button, not speaker |
-
-Then Dupont wires were soldered directly to the sub-board pads in place of the ribbon cable.
-
-<p align="center">
-  <img src="docs/images/sub-board-soldered.jpg" alt="Sub board with Dupont wires soldered" width="400">
-</p>
-
-### Assembly
-
-- **Button**: Black wire → GPIO17, White wire → GND (with internal pull-up). Pressing the dome bridges them, pulling GPIO17 low.
-- **Speaker**: MAX98357A I2S amplifier (mounted on a Google AIY VoiceHAT) drives the toy's original 8Ω speaker through the sub-board traces.
-- **Mic**: USB C-Media mic for now. An INMP441 I2S MEMS mic is planned and will free up the USB port.
-
-<p align="center">
-  <img src="docs/images/flower-wiring-back.jpg" alt="Final wiring inside the flower" width="400">
-</p>
-
-Full pin map, ALSA configuration, and the multimeter mapping notes: [docs/hardware.md](docs/hardware.md).
+Full pin map, ALSA configuration, and bill of materials: [docs/hardware.md](docs/hardware.md).
 
 ## How it works
 
@@ -118,96 +85,7 @@ Full bill of materials, wiring diagrams, and audio tuning notes: [docs/hardware.
 
 ## Build it yourself
 
-### Prerequisites
-
-- Raspberry Pi Zero 2 W (or any Pi with GPIO)
-- MAX98357A I2S amplifier connected to a speaker
-- [PicoClaw](https://github.com/sipeed/picoclaw) installed
-- ElevenLabs API key ([elevenlabs.io](https://elevenlabs.io))
-
-### Install
-
-```bash
-git clone https://github.com/manaporkun/talking-flower.git
-cd talking-flower
-chmod +x scripts/*.sh
-./scripts/setup.sh
-```
-
-### Configure
-
-```bash
-cd voice-assistant
-cp .env.example .env
-nano .env
-```
-
-### Set up the character
-
-```bash
-cp character/SOUL.md ~/.picoclaw/workspace/
-cp character/IDENTITY.md ~/.picoclaw/workspace/
-cp character/AGENTS.md ~/.picoclaw/workspace/
-cp character/USER.md.example ~/.picoclaw/workspace/USER.md
-nano ~/.picoclaw/workspace/USER.md
-```
-
-### Run
-
-```bash
-picoclaw gateway &
-./scripts/start.sh
-```
-
-### Run on boot
-
-```bash
-sudo cp systemd/picoclaw-gateway.service /etc/systemd/system/
-sudo cp systemd/talking-flower.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable picoclaw-gateway talking-flower
-sudo systemctl start picoclaw-gateway talking-flower
-```
-
-### Deploying changes
-
-```bash
-# On the Pi
-cd ~/talking-flower
-bash deploy.sh
-```
-
-Pulls latest from git and syncs character files to PicoClaw's workspace. Character changes take effect immediately. If `voice_assistant.py` changed, restart the service: `sudo systemctl restart talking-flower`.
-
-### Customizing the character
-
-Personality lives in four Markdown files in PicoClaw's workspace:
-
-| File | Purpose |
-|------|---------|
-| `SOUL.md` | Personality, voice rules, audio tags |
-| `IDENTITY.md` | Name, description, purpose |
-| `AGENTS.md` | Direct behavioral instructions |
-| `USER.md` | Info about the user |
-
-Edit these to make any character — a pirate, a robot, a grumpy cat. The ElevenLabs v3 audio tags work with any voice.
-
-### Configuration
-
-All config in `voice-assistant/.env`:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `STT_PROVIDER` | `elevenlabs` | `elevenlabs` or `openai` |
-| `ELEVENLABS_MODEL_ID` | `eleven_v3` | TTS model |
-| `PICOCLAW_MODEL` | `kimi-turbo` | LLM model |
-| `INPUT_MODE` | `auto` | `gpio`, `keyboard`, or `auto` |
-| `GPIO_BUTTON_PIN` | `17` | GPIO pin for the button |
-| `SILENCE_DURATION` | `1.5` | Seconds of silence before auto-stop |
-| `IDLE_CHATTER` | `1` | Enable random idle comments |
-| `STARTUP_MESSAGE` | | What Flowey says on boot |
-
-See `.env.example` for the full list.
+Prerequisites, install, character setup, running on boot, deploy, and the full config reference: [docs/setup.md](docs/setup.md).
 
 ## Project structure
 
@@ -217,7 +95,7 @@ talking-flower/
 ├── character/               # Personality files (SOUL, IDENTITY, AGENTS, USER)
 ├── scripts/                 # setup, start, wifi-watchdog, cleanup
 ├── systemd/                 # Boot services
-├── docs/                    # Hardware guide + build photos
+├── docs/                    # Build story, setup guide, hardware guide, photos
 └── deploy.sh                # Pull latest + sync to Pi
 ```
 
