@@ -5,9 +5,9 @@ Wants=picoclaw-gateway.service
 
 [Service]
 Type=simple
-User=plue
-WorkingDirectory=/home/plue/talking-flower/voice-assistant
-ExecStart=/home/plue/talking-flower/voice-assistant/.venv/bin/python3 voice_assistant.py
+User=pi
+WorkingDirectory=%h/talking-flower/voice-assistant
+ExecStart=%h/talking-flower/voice-assistant/.venv/bin/python3 voice_assistant.py
 Environment=INPUT_MODE=gpio
 Restart=on-failure
 RestartSec=3

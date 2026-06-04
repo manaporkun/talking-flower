@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # WiFi watchdog — restarts wlan0 if connectivity is lost
-# Run via cron: */2 * * * * /home/plue/talking-flower/scripts/wifi-watchdog.sh
+# Run via cron: */2 * * * * $HOME/talking-flower/scripts/wifi-watchdog.sh
 
 PING_TARGET="1.1.1.1"
 LOG="/tmp/wifi-watchdog.log"

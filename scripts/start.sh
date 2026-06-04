@@ -5,7 +5,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-PICOCLAW_BIN="${PICOCLAW_BIN:-/home/plue/picoclaw}"
+PICOCLAW_BIN="${PICOCLAW_BIN:-$HOME/picoclaw}"
 
 # Start gateway if not running
 if ! pgrep -f "picoclaw gateway" > /dev/null 2>&1; then

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Cleanup script — rotate logs, clean old sessions and temp audio files
-# Run via cron: 0 4 * * * /home/plue/talking-flower/scripts/cleanup.sh
+# Run via cron: 0 4 * * * $HOME/talking-flower/scripts/cleanup.sh
 
-WORKSPACE="/home/plue/.picoclaw/workspace"
-VOICE_DIR="/home/plue/talking-flower/voice-assistant"
+WORKSPACE="$HOME/.picoclaw/workspace"
+VOICE_DIR="$HOME/talking-flower/voice-assistant"
 LOG="/tmp/talking-flower-cleanup.log"
 
 echo "$(date): Running cleanup..." >> "$LOG"

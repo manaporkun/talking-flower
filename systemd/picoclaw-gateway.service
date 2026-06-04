@@ -5,9 +5,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=plue
-WorkingDirectory=/home/plue/.picoclaw/workspace
-ExecStart=/home/plue/picoclaw gateway
+User=pi
+WorkingDirectory=%h/.picoclaw/workspace
+ExecStart=%h/picoclaw gateway
 Restart=on-failure
 RestartSec=5
 

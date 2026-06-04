@@ -36,7 +36,7 @@ SAMPLE_RATE = int(os.getenv("SAMPLE_RATE", "16000"))
 INPUT_DEVICE_HINT = os.getenv("INPUT_DEVICE_HINT", "USB")
 OUTPUT_DEVICE_HINT = os.getenv("OUTPUT_DEVICE_HINT", "USB")
 
-PICOCLAW_BIN = os.getenv("PICOCLAW_BIN", "/home/plue/picoclaw")
+PICOCLAW_BIN = os.getenv("PICOCLAW_BIN", os.path.expanduser("~/picoclaw"))
 PICOCLAW_MODEL = os.getenv("PICOCLAW_MODEL", "kimi-turbo")
 PICOCLAW_SESSION = os.getenv("PICOCLAW_SESSION", "voice:assistant")
 
